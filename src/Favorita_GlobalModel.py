@@ -15,16 +15,19 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error,r2_score
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = PROJECT_ROOT / "data"
 
-train = pd.read_csv(DATA_PATH / "train.csv")
-test = pd.read_csv(DATA_PATH / "test.csv")
-stores = pd.read_csv(DATA_PATH / "stores.csv")
-oil = pd.read_csv(DATA_PATH / "oil.csv")
-holidays = pd.read_csv(DATA_PATH / "holidays_events.csv")
-transactions = pd.read_csv(DATA_PATH / "transactions.csv")
+def load_data(file_name):
+    return pd.read_csv(DATA_PATH / file_name)
+
+train = load_data("train.csv")
+test = load_data("test.csv")
+stores = load_data("stores.csv")
+oil = load_data("oil.csv")
+holidays = load_data("holidays_events.csv")
+transactions = load_data("transactions.csv")
 
 # endregion
 
-# region Initial Data Inspection
+# region Data Understanding
 
 datasets = {
     "train": train,
@@ -34,55 +37,79 @@ datasets = {
     "holidays": holidays,
     "transactions": transactions
 }
+# =====================================
+# # Dataset Overview:
 
 # for name, df in datasets.items():
-#     print("=" * 70)
+#     print("=" * 50)
 #     print(name.upper())
-#     print("=" * 70)
+#     print("=" * 50)
 
 #     print("\nShape:")
 #     print(df.shape)
 
 #     print("\nInfo:")
-#     print(df.info())
+#     df.info()
+
+#     print("\n")
+
+# # =====================================
+# # Data Quality Assessment:
+
+# for name, df in datasets.items():
+#     print("=" * 50)
+#     print(name.upper())
+#     print("=" * 50)
 
 #     print("\nMissing Values:")
 #     print(df.isnull().sum())
 
-#     print("\nUnique Values:")
-#     print(df.nunique())
+#     print("\nTotal Missing Values:")
+#     print(df.isnull().sum().sum())
 
-#     print("\nHead:")
-#     print(df.head())
+#     print("\nDuplicate Rows:")
+#     print(df.duplicated().sum())
 
 #     print("\n")
+
+# =====================================
+# # Target Variable Understanding:
+
+# # Summary Statistics:
+# print(train["sales"].describe())
+
+# # Zero Sales:
+# zero_sales = (train["sales"] == 0).sum()
+
+# print(f"Zero Sales: {zero_sales}")
+# print(f"Percentage : {zero_sales / len(train) * 100:.2f}%")
 
 # endregion
 
 # region Data Preparation
 
-# Convert Date Columns
-train["date"] = pd.to_datetime(train["date"])
-test["date"] = pd.to_datetime(test["date"])
-oil["date"] = pd.to_datetime(oil["date"])
-holidays["date"] = pd.to_datetime(holidays["date"])
-transactions["date"] = pd.to_datetime(transactions["date"])
+# =====================================
+# Convert Date Columns:
 
-# for name, df in datasets.items():
-#     if "date" in df.columns:
-#         print(f"\n{name}")
-#         print(df["date"].min())
-#         print(df["date"].max())
+for df in datasets.values():
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+
+# =====================================
+# Memory Check (Before Optimization):
 
 # print(train.memory_usage(deep=True))
 # print("\nTotal Memory (MB):")
 # print(train.memory_usage(deep=True).sum() / 1024**2)
 
+# =====================================
+# Optimize Data Types:
 
-# Optimize Data Types
+# Convert categorical columns:
 train["family"] = train["family"].astype("category")
 test["family"] = test["family"].astype("category")
 
+# Reduce integer memory usage:
 train["store_nbr"] = train["store_nbr"].astype("int8")
 test["store_nbr"] = test["store_nbr"].astype("int8")
 stores["store_nbr"] = stores["store_nbr"].astype("int8")
@@ -90,6 +117,9 @@ transactions["store_nbr"] = transactions["store_nbr"].astype("int8")
 
 train["onpromotion"] = train["onpromotion"].astype("int16")
 test["onpromotion"] = test["onpromotion"].astype("int16")
+
+# =====================================
+# Memory Check (After Optimization):
 
 # print(train.memory_usage(deep=True))
 # print("\nTotal Memory (MB):")
@@ -99,44 +129,76 @@ test["onpromotion"] = test["onpromotion"].astype("int16")
 
 # region EDA - Target Variable (Sales)
 
-# # Basic Statistics
+# =====================================
+# Business Question
+# What are the statistical characteristics of the target variable (sales)?
+#
+# Why this analysis?
+# Understanding the target distribution helps identify
+# skewness, zero-inflation, outliers and potential modeling challenges.
+# =====================================
+# Basic Statistics:
+
 # print(train["sales"].describe())
 
-# # Number of zero sales
+# # =====================================
+# # Zero Sales
+
 # zero_sales = (train["sales"] == 0).sum()
+
 # print(f"\nZero Sales : {zero_sales:,}")
+# print(f"Zero Sales Percentage : {zero_sales / len(train) * 100:.2f}%")
 
-# print(f"Zero Sales Percentage : {zero_sales/len(train)*100:.2f}%")
-
+# # =====================================
 # # Negative Sales
+
 # negative_sales = (train["sales"] < 0).sum()
+
 # print(f"\nNegative Sales : {negative_sales:,}")
 
-# # Maximum Sale
-# print(f"\nMaximum Sale : {train['sales'].max():,.2f}")
+# # =====================================
+# # Important Values
 
-# # Median Sale
-# print(f"Median Sale : {train['sales'].median():,.2f}")
+# print(f"\nMedian Sale : {train['sales'].median():,.2f}")
+# print(f"Maximum Sale : {train['sales'].max():,.2f}")
 
-# # Histogram
+# # =====================================
+# # Distribution
+
 # plt.figure(figsize=(10,5))
+
 # plt.hist(train["sales"], bins=100)
+
 # plt.title("Sales Distribution")
 # plt.xlabel("Sales")
 # plt.ylabel("Frequency")
+
+# plt.tight_layout()
 # plt.show()
 
+# # =====================================
 # # Boxplot
+
 # plt.figure(figsize=(10,2))
+
 # plt.boxplot(train["sales"], vert=False)
+
 # plt.title("Sales Boxplot")
+
+# plt.tight_layout()
 # plt.show()
 
 # endregion
 
-# region EDA - Overall Sales Trend
+# region EDA - Trend Analysis
 
-# Daily Total Sales
+# =====================================
+# Business Question
+# How has the overall sales volume changed over time?
+#
+# Analysis Level
+# Daily Total Sales (Aggregated across all stores and families)
+# =====================================
 daily_sales = (
     train.groupby("date", as_index=False)["sales"]
          .sum()
@@ -146,6 +208,17 @@ daily_sales = (
 # print(daily_sales.tail())
 # print(f"\nNumber of Days: {len(daily_sales)}")
 
+# =====================================
+# Business Question
+# How has total daily sales changed over time?
+#
+# Why this analysis?
+# Before building a forecasting model, we need to understand
+# whether sales exhibit a long-term trend or major structural changes.
+#
+# Analysis Level
+# Daily sales aggregated across all stores and product families.
+# =====================================
 # plt.figure(figsize=(16, 6))
 
 # plt.plot(daily_sales["date"], daily_sales["sales"])
@@ -159,6 +232,104 @@ daily_sales = (
 
 # endregion
 
+# region EDA - Seasonality Analysis
+
+# =====================================
+# Business Question
+# Does sales exhibit recurring seasonal patterns?
+#
+# Why this analysis?
+# Forecasting models rely heavily on seasonal behavior.
+# In this section we investigate sales patterns across
+# different time scales:
+#
+# • Yearly
+# • Monthly
+# • Weekly
+# =====================================
+# Yearly Seasonality:
+
+# Extract Year:
+daily_sales["year"] = daily_sales["date"].dt.year
+
+plt.figure(figsize=(16,6))
+
+for year, group in daily_sales.groupby("year"):
+    plt.plot(
+        group["date"].dt.dayofyear,
+        group["sales"],
+        label=year
+    )
+
+plt.title("Daily Sales by Year")
+plt.xlabel("Day of Year")
+plt.ylabel("Total Sales")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# =====================================
+# Monthly Seasonality:
+
+monthly_sales = (
+    daily_sales.assign(month=daily_sales["date"].dt.month)
+              .groupby("month", as_index=False)["sales"]
+              .mean()
+)
+
+month_labels = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+]
+
+plt.figure(figsize=(12,5))
+
+plt.plot(monthly_sales["month"], monthly_sales["sales"])
+
+plt.xticks(range(1, 13), month_labels)
+
+plt.title("Average Daily Sales by Month")
+plt.xlabel("Month")
+plt.ylabel("Average Daily Sales")
+
+plt.tight_layout()
+plt.show()
+
+# =====================================
+# Weekly Seasonality:
+
+weekly_sales = (
+    daily_sales.assign(weekday=daily_sales["date"].dt.dayofweek)
+              .groupby("weekday", as_index=False)["sales"]
+              .mean()
+)
+
+weekday_labels = [
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+    "Sun"
+]
+
+plt.figure(figsize=(10,5))
+
+plt.plot(weekly_sales["weekday"], weekly_sales["sales"])
+
+plt.xticks(range(7), weekday_labels)
+
+plt.title("Average Daily Sales by Weekday")
+plt.xlabel("Weekday")
+plt.ylabel("Average Daily Sales")
+
+plt.tight_layout()
+plt.show()
+
+# endregion
+raise SystemExit
 # region Choose a Representative Time Series
 
 df = train.copy()
