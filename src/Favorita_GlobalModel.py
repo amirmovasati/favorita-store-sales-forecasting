@@ -252,22 +252,22 @@ daily_sales = (
 # Extract Year:
 daily_sales["year"] = daily_sales["date"].dt.year
 
-plt.figure(figsize=(16,6))
+# plt.figure(figsize=(16,6))
 
-for year, group in daily_sales.groupby("year"):
-    plt.plot(
-        group["date"].dt.dayofyear,
-        group["sales"],
-        label=year
-    )
+# for year, group in daily_sales.groupby("year"):
+#     plt.plot(
+#         group["date"].dt.dayofyear,
+#         group["sales"],
+#         label=year
+#     )
 
-plt.title("Daily Sales by Year")
-plt.xlabel("Day of Year")
-plt.ylabel("Total Sales")
-plt.legend()
+# plt.title("Daily Sales by Year")
+# plt.xlabel("Day of Year")
+# plt.ylabel("Total Sales")
+# plt.legend()
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 # =====================================
 # Monthly Seasonality:
@@ -278,23 +278,23 @@ monthly_sales = (
               .mean()
 )
 
-month_labels = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-]
+# month_labels = [
+#     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+#     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+# ]
 
-plt.figure(figsize=(12,5))
+# plt.figure(figsize=(12,5))
 
-plt.plot(monthly_sales["month"], monthly_sales["sales"])
+# plt.plot(monthly_sales["month"], monthly_sales["sales"])
 
-plt.xticks(range(1, 13), month_labels)
+# plt.xticks(range(1, 13), month_labels)
 
-plt.title("Average Daily Sales by Month")
-plt.xlabel("Month")
-plt.ylabel("Average Daily Sales")
+# plt.title("Average Daily Sales by Month")
+# plt.xlabel("Month")
+# plt.ylabel("Average Daily Sales")
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 # =====================================
 # Weekly Seasonality:
@@ -305,78 +305,64 @@ weekly_sales = (
               .mean()
 )
 
-weekday_labels = [
-    "Mon",
-    "Tue",
-    "Wed",
-    "Thu",
-    "Fri",
-    "Sat",
-    "Sun"
-]
+# weekday_labels = [
+#     "Mon",
+#     "Tue",
+#     "Wed",
+#     "Thu",
+#     "Fri",
+#     "Sat",
+#     "Sun"
+# ]
 
-plt.figure(figsize=(10,5))
+# plt.figure(figsize=(10,5))
 
-plt.plot(weekly_sales["weekday"], weekly_sales["sales"])
+# plt.plot(weekly_sales["weekday"], weekly_sales["sales"])
 
-plt.xticks(range(7), weekday_labels)
+# plt.xticks(range(7), weekday_labels)
 
-plt.title("Average Daily Sales by Weekday")
-plt.xlabel("Weekday")
-plt.ylabel("Average Daily Sales")
+# plt.title("Average Daily Sales by Weekday")
+# plt.xlabel("Weekday")
+# plt.ylabel("Average Daily Sales")
 
-plt.tight_layout()
-plt.show()
-
-# endregion
-raise SystemExit
-# region Choose a Representative Time Series
-
-df = train.copy()
-
-df = df.sort_values(
-    ["store_nbr", "family", "date"]
-).reset_index(drop=True)
+# plt.tight_layout()
+# plt.show()
 
 # endregion
 
 # region Merge Stores Features
 
-# Explore Stores Dataset
-# print(stores.head())
-
-# print("\nColumns")
-# print(stores.columns)
-
-# print("\nMissing Values")
-# print(stores.isnull().sum())
-
-# print("\nStore Types")
-# print(stores["type"].value_counts())
-
-# print("\nClusters")
-# print(stores["cluster"].value_counts().sort_index())
-
-# print("\nCities")
-# print(stores["city"].nunique())
-
-# print("\nStates")
-# print(stores["state"].nunique())
-
-# Merge
+# =====================================
+# Business Question
+# Can store characteristics help explain differences in sales?
+#
+# Why this analysis?
+# The stores dataset contains additional information about
+# each store, such as location, type and cluster. These
+# attributes may improve forecasting performance.
+# =====================================
+# Merge Store Information:
+df = train.copy()
 df = df.merge(
     stores,
     on="store_nbr",
     how="left"
 )
 
-# Verify Merge
+df = df.rename(
+    columns={
+        "type": "store_type",
+        "cluster": "store_cluster"
+    }
+)
+
+# # Verify Merge:
 # print(df[[
 #     "store_nbr",
 #     "city",
 #     "state",
-#     "type",
-#     "cluster"
+#     "store_type",
+#     "store_cluster"
 # ]].head())
 
 # print()
@@ -384,100 +370,227 @@ df = df.merge(
 # print(df[[
 #     "city",
 #     "state",
-#     "type",
-#     "cluster"
+#     "store_type",
+#     "store_cluster"
 # ]].isnull().sum())
-
-# endregion
-
-# region One-Hot Encoding for Store Features
-
-df = pd.get_dummies(
-    df,
-    columns=[
-        "city",
-        "state",
-        "type"
-    ],
-    drop_first=True,
-    dtype="int8"
-)
 
 # endregion
 
 # region Merge Holiday Features
 
-# Check Holiday Columns
-# print(holidays.columns)
+# =====================================
+# Business Question
+#
+# Can holiday-related information improve
+# sales forecasting?
+#
+# Decision:
+#
+# Create four binary calendar features:
+#
+# - is_holiday
+# - is_black_friday
+# - is_cyber_monday
+# - is_mothers_day
+#
+# National, Regional and Local holidays are
+# mapped to the stores they affect.
+#
+# Unpredictable external events are excluded
+# because they are not available at prediction
+# time.
+#
+# Business-driven events with known future
+# dates are retained as forecasting features.
+# =====================================
 
-# print("\nHoliday Types")
-# print(holidays["type"].value_counts())
 
-# print("\nHoliday Locales")
-# print(holidays["locale"].value_counts())
+# =====================================
+# Create Holiday Feature
+#
+# National holidays apply to all stores.
+# Regional holidays apply to stores within
+# the corresponding state.
+# Local holidays apply to stores within
+# the corresponding city.
+#
+# Transferred holidays are excluded from the
+# original date because the transferred date
+# is represented separately in the dataset.
+# =====================================
 
-# print("\nTransferred")
-# print(holidays["transferred"].value_counts())
+df["is_holiday"] = 0
 
-# Keep Only Valid National Holidays
-holiday_df = holidays[
+
+# ----- National Holidays -----
+
+national_holidays = holidays[
     (holidays["type"] == "Holiday") &
     (holidays["locale"] == "National") &
     (holidays["transferred"] == False)
-].copy()
+][["date"]].drop_duplicates()
 
-holiday_df = holiday_df[
-    [
-        "date",
-        "type"
-    ]
-]
+df.loc[
+    df["date"].isin(national_holidays["date"]),
+    "is_holiday"
+] = 1
 
-# Rename Holiday Type
-holiday_df = holiday_df.rename(
-    columns={
-        "type": "holiday_type"
-    }
+
+# ----- Regional Holidays -----
+
+regional_holidays = holidays[
+    (holidays["type"] == "Holiday") &
+    (holidays["locale"] == "Regional") &
+    (holidays["transferred"] == False)
+][[
+    "date",
+    "locale_name"
+]].drop_duplicates()
+
+regional_holidays = regional_holidays.rename(
+    columns={"locale_name": "state"}
 )
 
-holiday_df["is_holiday"] = 1
-
-# Merge
 df = df.merge(
-    holiday_df,
-    on="date",
+    regional_holidays.assign(is_regional_holiday=1),
+    on=["date", "state"],
     how="left"
 )
 
-# Fill Missing Holiday Values
 df["is_holiday"] = (
-    df["is_holiday"]
-    .fillna(0)
+    df["is_holiday"].astype(bool) |
+    df["is_regional_holiday"].fillna(0).astype(bool)
+).astype("int8")
+
+df = df.drop(columns="is_regional_holiday")
+
+
+# ----- Local Holidays -----
+
+local_holidays = holidays[
+    (holidays["type"] == "Holiday") &
+    (holidays["locale"] == "Local") &
+    (holidays["transferred"] == False)
+][[
+    "date",
+    "locale_name"
+]].drop_duplicates()
+
+local_holidays = local_holidays.rename(
+    columns={"locale_name": "city"}
+)
+
+df = df.merge(
+    local_holidays.assign(is_local_holiday=1),
+    on=["date", "city"],
+    how="left"
+)
+
+df["is_holiday"] = (
+    df["is_holiday"].astype(bool) |
+    df["is_local_holiday"].fillna(0).astype(bool)
+).astype("int8")
+
+df = df.drop(columns="is_local_holiday")
+
+
+# =====================================
+# Create Special Event Features
+#
+# Only business-relevant events with known
+# future dates are retained.
+# =====================================
+
+# ----- Black Friday -----
+
+black_friday_dates = holidays[
+    holidays["description"].str.contains(
+        "Black Friday",
+        case=False,
+        na=False
+    )
+]["date"].drop_duplicates()
+
+df["is_black_friday"] = (
+    df["date"]
+    .isin(black_friday_dates)
     .astype("int8")
 )
 
-df["holiday_type"] = (
-    df["holiday_type"]
-    .fillna("None")
+
+# ----- Cyber Monday -----
+
+cyber_monday_dates = holidays[
+    holidays["description"].str.contains(
+        "Cyber Monday",
+        case=False,
+        na=False
+    )
+]["date"].drop_duplicates()
+
+df["is_cyber_monday"] = (
+    df["date"]
+    .isin(cyber_monday_dates)
+    .astype("int8")
 )
 
-# One-Hot Encoding
-df = pd.get_dummies(
-    df,
-    columns=["holiday_type"],
-    drop_first=True,
-    dtype="int8"
+
+# ----- Mother's Day -----
+
+mothers_day_dates = holidays[
+    holidays["description"].str.contains(
+        "Dia de la Madre",
+        case=False,
+        na=False
+    )]["date"].drop_duplicates()
+
+df["is_mothers_day"] = (
+    df["date"]
+    .isin(mothers_day_dates)
+    .astype("int8")
 )
 
-# Verify Holiday Merge
-# print(df["is_holiday"].value_counts())
 
-# print()
+# =====================================
+# Verify Calendar Features
+#
+# All four features must be binary int8
+# variables.
+# =====================================
 
-# print(df[["date", "is_holiday"]].head(20))
+calendar_features = [
+    "is_holiday",
+    "is_black_friday",
+    "is_cyber_monday",
+    "is_mothers_day"
+]
+
+print("===== Calendar Features =====")
+
+print(
+    df[calendar_features].sum()
+)
+
+print()
+
+print("===== Data Types =====")
+
+print(
+    df[calendar_features].dtypes
+)
+
+print()
+
+print("===== Unique Values =====")
+
+for feature in calendar_features:
+    print(
+        f"{feature}: "
+        f"{df[feature].unique()}"
+    )
 
 # endregion
-
+raise SystemExit
 # region Merge Transactions Features
 
 # Merge
