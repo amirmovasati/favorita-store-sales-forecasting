@@ -1,4 +1,4 @@
-🌐 [مطالعه به فارسی](README.fa.md)
+🌐 [فارسی / Persian](README.fa.md)
 # Favorita Store Sales Forecasting
 
 Multi-horizon retail demand forecasting for Corporación Favorita (Ecuador) — built as an end-to-end case study in diagnosing *why* a forecasting model fails on specific segments, not just in building one that scores well on average.
