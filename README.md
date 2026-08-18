@@ -12,9 +12,20 @@ This project forecasts daily sales, 1 to 15 days ahead, for every store–produc
 ## Key Results
 
 - **Overall validation WAPE: 12.44%** (MAE 59.2, RMSE 211.7) across a 15-day forecast horizon, evaluated on four held-out origins.
+- **64% lower error than a naive persistence baseline** (34.22% WAPE) and **27% lower error than a weekly-seasonal-naive baseline** (16.99% WAPE) — see the table below.
 - **High-confidence predictions (67% of tail volume) achieve a WAPE of 10.46%** and a severe-underprediction rate of just **0.42%**.
 - **Low-confidence predictions carry a severe-underprediction rate of 15.22%** — 36x higher than high-confidence predictions — identified automatically by a post-hoc reliability layer (see below), without changing the model itself.
 - Diagnosed that large sales spikes are concentrated in specific store/family combinations (mainly `CLEANING`, store type `C`) and ruled out promotions as the cause through targeted hypothesis testing.
+
+### Baseline Comparison
+
+| Model | Average WAPE (across 3 forecast origins, 15-day horizon) |
+|---|---|
+| Naive (persistence) | 34.22% |
+| Weekly Seasonal Naive | 16.99% |
+| **XGBoost (this project)** | **12.44%** |
+
+The weekly-seasonal baseline (last observed value for the same day of week) is already a reasonably strong baseline for retail data, since it captures weekly demand cycles. The XGBoost model still cuts its error by more than a quarter, primarily by learning cross-series patterns (store, family, cluster) and longer-term trend/volatility signals that a per-series seasonal lookup cannot capture.
 
 ## Approach
 
@@ -70,7 +81,6 @@ Feature importance (gain-based) and SHAP values both confirm the model relies pr
 
 - The model underpredicts roughly 1.1% of high-volume (>1000 units) days by more than 50%, concentrated in a small number of store–family series with inherently volatile demand histories.
 - This is treated as a **known, quantified, and flagged** limitation (via the confidence layer above) rather than an unaddressed gap — a deliberate choice over chasing diminishing-return fixes (aggressive re-weighting or unconstrained hyperparameter search) that risk overfitting to a few hundred rows.
-- Baseline comparisons (naive persistence and weekly-seasonal-naive) are computed in the pipeline; see `Baseline - Naive` and `Baseline - Weekly Seasonal Naive` sections of the script.
 
 ## Project Structure
 
