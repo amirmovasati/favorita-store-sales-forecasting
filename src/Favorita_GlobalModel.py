@@ -1140,14 +1140,14 @@ baseline_results_df = pd.DataFrame(
     baseline_results
 )
 
-# print("\nNaive Baseline Results")
-# print("=" * 70)
+print("\nNaive Baseline Results")
+print("=" * 70)
 
-# print(
-#     baseline_results_df.to_string(
-#         index=False
-#     )
-# )
+print(
+    baseline_results_df.to_string(
+        index=False
+    )
+)
 
 # endregion
 
@@ -1300,14 +1300,14 @@ weekly_seasonal_results_df = pd.DataFrame(
     weekly_seasonal_results
 )
 
-# print("\nWeekly Seasonal Naive Baseline Results")
-# print("=" * 75)
+print("\nWeekly Seasonal Naive Baseline Results")
+print("=" * 75)
 
-# print(
-#     weekly_seasonal_results_df.to_string(
-#         index=False
-#     )
-# )
+print(
+    weekly_seasonal_results_df.to_string(
+        index=False
+    )
+)
 
 # endregion
 
