@@ -1,0 +1,9 @@
+data/
+outputs/
+reports/
+.git/
+__pycache__/
+*.pyc
+.vscode/
+Favorita_GlobalModel.py
+test_pipeline_manual.py
