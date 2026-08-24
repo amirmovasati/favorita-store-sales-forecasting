@@ -1,7 +1,18 @@
 🌐 [فارسی / Persian](README.fa.md)
 # Favorita Store Sales Forecasting
 
-Multi-horizon retail demand forecasting for Corporación Favorita (Ecuador) — built as an end-to-end case study in diagnosing *why* a forecasting model fails on specific segments, not just in building one that scores well on average.
+Multi-horizon retail demand forecasting for Corporación Favorita (Ecuador) — built as an end-to-end case study in diagnosing *why* a forecasting model fails on specific segments, not just in building one that scores well on average, **and in turning that model into a working, deployable system a non-technical business user can actually run.**
+
+## Why This Project
+
+Most portfolio forecasting projects stop at a trained model in a notebook. This one goes further: **a validated model, a documented diagnosis of its failure modes (see below), and a working deployment pipeline** — data ingestion, a business decision layer, a REST API, a Docker container, lightweight monitoring, and a simple web page a non-technical user can run without touching any code.
+
+- 📊 **Model**: 12.44% WAPE, 64% lower error than a naive baseline, with a validated confidence-tagging layer for low-reliability predictions (details below)
+- ⚙️ **Pipeline**: ingestion → validation → feature engineering → inference → business decision (stockout/overstock risk), runnable end-to-end with one command
+- 🌐 **Serving**: FastAPI + Docker, with a no-code web page for business users — pick a date, click a button, get a plain-language forecast summary and a downloadable report
+- 📈 **Monitoring**: every pipeline run is logged (success/failure, duration, output counts)
+
+👉 See [Production Deployment Pipeline](#production-deployment-pipeline) for the full breakdown, or keep reading for the modeling work.
 
 ## The Business Problem
 
@@ -82,13 +93,109 @@ Feature importance (gain-based) and SHAP values both confirm the model relies pr
 - The model underpredicts roughly 1.1% of high-volume (>1000 units) days by more than 50%, concentrated in a small number of store–family series with inherently volatile demand histories.
 - This is treated as a **known, quantified, and flagged** limitation (via the confidence layer above) rather than an unaddressed gap — a deliberate choice over chasing diminishing-return fixes (aggressive re-weighting or unconstrained hyperparameter search) that risk overfitting to a few hundred rows.
 
+---
+
+## Production Deployment Pipeline
+
+Training a good model is one problem. Getting its output into the hands of someone who plans inventory — and who has never opened a terminal — is a different, and in practice just as important, problem. This section covers the second one.
+
+### Architecture
+
+```
+train.csv
+   │
+   ▼  ingestion.py (simulates daily data arrival)
+history (accumulated day by day, validated on arrival)
+   │
+   ▼  validation.py (schema / missing-key / invalid-value checks)
+   ▼  feature_engineering.py (calendar, lag, rolling, volatility features)
+   ▼  inference.py (loads the trained XGBoost model, predicts)
+   ▼  decision.py (clips negatives, attaches confidence, flags stockout/overstock risk)
+   │
+   ▼
+report_<date>.csv  — a business-usable file, plus a JSON API and a web page
+```
+
+Each stage is an independent, tested Python module under `src/pipeline/`. `run_pipeline.py` is the single entry point that wires them together — one command runs the whole chain for a given date.
+
+### Business Decision Layer
+
+The pipeline's output is not a raw forecast number. Each prediction is compared against an (externally supplied) inventory level to flag `stockout_risk`, `overstock_risk`, or `optimal` — the pipeline never invents inventory data; it expects it as input, the way a real system would pull it from a warehouse/ERP feed. A small sample inventory file (`data/sample_inventory.csv`) is included for demonstration.
+
+### No-Code Web Interface
+
+A business user with zero technical background can use this system directly:
+
+1. Open the web page.
+2. Pick a date.
+3. Click "Get Forecast."
+4. Read a one-line summary ("159 items at stockout risk...") and a small color-coded table of only the items that need attention.
+5. Download the full report as CSV if more detail is needed.
+
+No command line, no code, no file paths to type.
+
+### API
+
+Built with FastAPI:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | The no-code web page described above |
+| `GET /forecast?origin_date=YYYY-MM-DD` | Runs the pipeline, returns a JSON summary + priority items |
+| `GET /download?origin_date=YYYY-MM-DD` | Downloads the full CSV report |
+| `GET /health` | Liveness check |
+| `GET /monitoring` | Recent pipeline run history (see Monitoring below) |
+
+### Containerization
+
+The service is packaged with Docker, so it runs identically regardless of the host machine's Python version or installed packages:
+
+```bash
+docker build -t favorita-pipeline .
+docker run -p 8000:8000 \
+  -v ${PWD}/data:/app/data \
+  -v ${PWD}/outputs:/app/outputs \
+  -v ${PWD}/reports:/app/reports \
+  -v ${PWD}/logs:/app/logs \
+  favorita-pipeline
+```
+
+Then open `http://localhost:8000`.
+
+### Monitoring
+
+Every pipeline run — whether triggered from the command line, the API, or the web page — is logged to `logs/pipeline_runs.jsonl` with its timestamp, duration, row counts, and outcome (success or the exact error on failure). `GET /monitoring` surfaces the most recent runs without needing to open the log file directly.
+
+### Design Choices Worth Noting
+
+- **Rolling/walk-forward simulation, not a single static split.** No genuinely new data exists beyond the original Kaggle dataset, so the pipeline treats a chosen date as "today," simulates daily data arrival up to that point, and forecasts forward — closer to how a real deployed system experiences data than a one-time train/test split.
+- **Deliberately excluded**: Kubernetes, complex CI/CD, cloud infrastructure, microservices. None of these solve a problem this project actually has (single-container load, no multi-service traffic); adding them would be complexity for its own sake, not engineering judgment.
+- **`Favorita_GlobalModel.py` (the research/EDA script) was left untouched.** The pipeline's feature-engineering logic is a deliberate, documented duplication tuned for reuse and production use, rather than a refactor of the research script — keeping the two concerns (research vs. production) cleanly separated.
+
 ## Project Structure
 
 ```
 Favorita Store Sales Forecasting/
 ├── src/
-│   └── Favorita_GlobalModel.py   # Full pipeline: EDA → features → model → diagnostics
-├── data/                          # Raw Kaggle data (not tracked in git)
+│   ├── Favorita_GlobalModel.py   # Full modeling pipeline: EDA → features → model → diagnostics
+│   └── pipeline/                 # Production deployment pipeline (see above)
+│       ├── ingestion.py
+│       ├── validation.py
+│       ├── history_store.py
+│       ├── feature_engineering.py
+│       ├── inference.py
+│       ├── decision.py
+│       └── monitoring.py
+├── run_pipeline.py                # Single entry point for the deployment pipeline
+├── api.py                         # FastAPI service + no-code web page
+├── Dockerfile
+├── .dockerignore
+├── scripts/
+│   └── test_pipeline_manual.py    # Manual smoke test against real project data
+├── data/                          # Raw Kaggle data + sample_inventory.csv (not tracked in git)
+├── outputs/                       # Trained model artifacts (not tracked in git)
+├── reports/                       # Pipeline output reports (not tracked in git)
+├── logs/                          # Pipeline run history (not tracked in git)
 ├── notebooks/                     # (reserved for exploratory notebooks)
 ├── assets/                        # Images used in this README
 ├── requirements.txt
@@ -100,6 +207,8 @@ Favorita Store Sales Forecasting/
 [Store Sales - Time Series Forecasting (Kaggle)](https://www.kaggle.com/c/store-sales-time-series-forecasting) — daily sales data for Corporación Favorita, an Ecuador-based grocery retailer, including store metadata, oil prices, holidays, and promotions.
 
 ## How to Run
+
+### 1. Train the model
 
 ```bash
 pip install -r requirements.txt
@@ -113,6 +222,22 @@ python src/Favorita_GlobalModel.py
 
 By default, model artifacts (trained model, processed datasets, predictions) are saved to `outputs/<run_tag>/` inside the project — no configuration needed. To redirect large artifacts elsewhere (e.g. to avoid cloud-sync storage limits), set the `FAVORITA_OUTPUT_DIR` environment variable once; the script falls back to the in-project default automatically if it's not set.
 
+### 2. Run the deployment pipeline
+
+```bash
+python run_pipeline.py --date 2017-07-20
+python run_pipeline.py --date 2017-07-20 --inventory data/sample_inventory.csv
+```
+
+### 3. Run the API + web page (with Docker)
+
+```bash
+docker build -t favorita-pipeline .
+docker run -p 8000:8000 -v ${PWD}/data:/app/data -v ${PWD}/outputs:/app/outputs -v ${PWD}/reports:/app/reports -v ${PWD}/logs:/app/logs favorita-pipeline
+```
+
+Open `http://localhost:8000`.
+
 ## Tech Stack
 
-Python · pandas · NumPy · XGBoost · SHAP · scikit-learn (metrics) · matplotlib
+Python · pandas · NumPy · XGBoost · SHAP · scikit-learn (metrics) · matplotlib · FastAPI · uvicorn · Docker
