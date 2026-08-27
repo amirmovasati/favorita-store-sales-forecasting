@@ -112,51 +112,244 @@ HTML_PAGE = """
 <head>
 <meta charset="utf-8">
 <title>Favorita Sales Forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 720px;
-         margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
-  h1 { font-size: 22px; }
-  .controls { display: flex; gap: 8px; align-items: center; margin: 16px 0; }
-  input[type=date] { padding: 8px; font-size: 15px; }
-  button { padding: 8px 16px; font-size: 15px; background: #2563eb; color: white;
-           border: none; border-radius: 6px; cursor: pointer; }
-  button:disabled { background: #93a3b8; cursor: default; }
-  #summary { font-size: 17px; margin: 16px 0; padding: 12px; background: #f3f4f6;
-             border-radius: 6px; min-height: 24px; }
-  table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 12px; }
-  th, td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; }
-  th { background: #f9fafb; }
-  .stockout { background: #fee2e2; }
-  .overstock { background: #fef9c3; }
-  #downloadLink { display: none; margin-top: 14px; }
-  #note { color: #6b7280; font-size: 13px; margin-top: 8px; }
+  :root {
+    --bg: #0B1420;
+    --surface: #14202F;
+    --surface-2: #1A2B3E;
+    --border: #263449;
+    --text: #EAF1F8;
+    --text-dim: #8FA3B8;
+    --gold: #E8A33D;
+    --gold-dim: #6B4F22;
+    --red: #E5533D;
+    --red-bg: #2E1712;
+    --mustard: #C9932E;
+    --mustard-bg: #2A2210;
+    --teal: #3FBF8F;
+    --teal-bg: #12271F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 64px;
+  }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 0 rgba(63,191,143,0.6);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(63,191,143,0.5); }
+    70%  { box-shadow: 0 0 0 7px rgba(63,191,143,0); }
+    100% { box-shadow: 0 0 0 0 rgba(63,191,143,0); }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 24px;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+  }
+  label.field {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: block;
+    margin-bottom: 6px;
+  }
+  input[type=date] {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  button#runBtn {
+    background: var(--gold);
+    color: #1a1204;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 6px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    margin-top: 18px;
+  }
+  button#runBtn:hover { background: #f2b358; }
+  button#runBtn:disabled { background: var(--gold-dim); color: var(--text-dim); cursor: default; }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--edge, var(--border));
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .metric .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .metric .lbl {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+  .metric.total { --edge: var(--gold); }
+  .metric.stockout { --edge: var(--red); }
+  .metric.overstock { --edge: var(--mustard); }
+
+  #tableContainer { margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; }
+  th {
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+  }
+  td {
+    padding: 9px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  td.num { font-family: 'IBM Plex Mono', monospace; text-align: right; }
+  .pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .pill.stockout_risk { background: var(--red-bg); color: #F0897A; }
+  .pill.overstock_risk { background: var(--mustard-bg); color: #E0B65C; }
+
+  #downloadLink {
+    display: none;
+    margin-top: 16px;
+    color: var(--gold);
+    font-size: 13px;
+    text-decoration: none;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  #downloadLink:hover { text-decoration: underline; }
+  #note { color: var(--text-dim); font-size: 12px; margin-top: 10px; }
+  #summaryEmpty { color: var(--text-dim); font-size: 14px; }
 </style>
 </head>
 <body>
-  <h1>Favorita Store Sales Forecast</h1>
-  <div class="controls">
-    <input type="date" id="originDate" value="2017-07-20">
-    <label style="font-size: 14px;">
-      <input type="checkbox" id="useInventory"> Use sample inventory data
-    </label>
-    <button id="runBtn" onclick="runForecast()">Get Forecast</button>
+
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Favorita &middot; Forecast Ops</p>
+      <h1>Store sales forecast</h1>
+    </div>
+    <div class="status"><span class="pulse"></span>PIPELINE ONLINE</div>
   </div>
-  <div id="summary">Pick a date and click "Get Forecast".</div>
+
+  <div class="panel">
+    <div class="controls">
+      <div>
+        <label class="field">Origin date</label>
+        <input type="date" id="originDate" value="2017-07-20">
+      </div>
+      <div class="checkbox-row" style="margin-top: 20px;">
+        <input type="checkbox" id="useInventory">
+        <label for="useInventory">Use sample inventory data</label>
+      </div>
+    </div>
+    <button id="runBtn" onclick="runForecast()">Run forecast</button>
+  </div>
+
+  <div id="metricsContainer"></div>
+  <div id="summaryEmpty" class="panel">Pick a date and run a forecast to see results.</div>
   <div id="tableContainer"></div>
-  <a id="downloadLink" href="#">Download full report (CSV)</a>
+  <a id="downloadLink" href="#">&darr; Download full report (CSV)</a>
   <div id="note"></div>
 
 <script>
 async function runForecast() {
   const date = document.getElementById('originDate').value;
   const btn = document.getElementById('runBtn');
-  const summary = document.getElementById('summary');
+  const metricsContainer = document.getElementById('metricsContainer');
+  const summaryEmpty = document.getElementById('summaryEmpty');
   const tableContainer = document.getElementById('tableContainer');
   const downloadLink = document.getElementById('downloadLink');
   const note = document.getElementById('note');
 
   btn.disabled = true;
-  summary.textContent = 'Running... this can take about a minute.';
+  summaryEmpty.textContent = 'Running the pipeline -- this can take about a minute.';
+  summaryEmpty.style.display = 'block';
+  metricsContainer.innerHTML = '';
   tableContainer.innerHTML = '';
   downloadLink.style.display = 'none';
   note.textContent = '';
@@ -167,29 +360,31 @@ async function runForecast() {
     const res = await fetch(`/forecast?origin_date=${date}${invParam}`);
     const data = await res.json();
     if (!res.ok) {
-      summary.textContent = 'Error: ' + (data.detail || 'unknown error');
+      summaryEmpty.textContent = 'Error: ' + (data.detail || 'unknown error');
       btn.disabled = false;
       return;
     }
 
+    summaryEmpty.style.display = 'none';
+
     const counts = data.decision_status_counts;
     const stockout = counts.stockout_risk || 0;
     const overstock = counts.overstock_risk || 0;
-    const optimal = counts.optimal || 0;
 
-    summary.innerHTML =
-      `<b>${data.rows}</b> forecasts generated for <b>${data.origin_date}</b>. ` +
-      `<b>${stockout}</b> item(s) at stockout risk, ` +
-      `<b>${overstock}</b> at overstock risk, <b>${optimal}</b> optimal.`;
+    metricsContainer.innerHTML = `
+      <div class="metrics">
+        <div class="metric total"><div class="num">${data.rows}</div><div class="lbl">Forecasts generated</div></div>
+        <div class="metric stockout"><div class="num">${stockout}</div><div class="lbl">Stockout risk</div></div>
+        <div class="metric overstock"><div class="num">${overstock}</div><div class="lbl">Overstock risk</div></div>
+      </div>`;
 
     if (data.priority_items.length > 0) {
-      let html = '<table><tr><th>Store</th><th>Product</th><th>Target Date</th>' +
-                 '<th>Forecast</th><th>Status</th></tr>';
+      let html = '<table><tr><th>Store</th><th>Product</th><th>Target date</th><th style="text-align:right">Forecast</th><th>Status</th></tr>';
       for (const row of data.priority_items) {
-        const cls = row.decision_status === 'stockout_risk' ? 'stockout' : 'overstock';
-        html += `<tr class="${cls}"><td>${row.store_nbr}</td><td>${row.family}</td>` +
-                `<td>${row.target_date}</td><td>${Number(row.forecast).toFixed(1)}</td>` +
-                `<td>${row.decision_status}</td></tr>`;
+        const label = row.decision_status === 'stockout_risk' ? 'Stockout risk' : 'Overstock risk';
+        html += `<tr><td>${row.store_nbr}</td><td>${row.family}</td>` +
+                `<td class="num">${row.target_date}</td><td class="num">${Number(row.forecast).toFixed(1)}</td>` +
+                `<td><span class="pill ${row.decision_status}">${label}</span></td></tr>`;
       }
       html += '</table>';
       tableContainer.innerHTML = html;
@@ -197,13 +392,14 @@ async function runForecast() {
         note.textContent = 'Showing the first 100 items needing attention. Download the full report for everything.';
       }
     } else {
-      tableContainer.innerHTML = '<p>No items need attention for this date (or no inventory data was supplied).</p>';
+      tableContainer.innerHTML = '<div class="panel" style="color: var(--text-dim); font-size:14px;">No items need attention for this date (or no inventory data was supplied).</div>';
     }
 
     downloadLink.href = `/download?origin_date=${date}`;
     downloadLink.style.display = 'inline-block';
   } catch (err) {
-    summary.textContent = 'Something went wrong: ' + err;
+    summaryEmpty.style.display = 'block';
+    summaryEmpty.textContent = 'Something went wrong: ' + err;
   } finally {
     btn.disabled = false;
   }
