@@ -73,6 +73,7 @@ def forecast(origin_date: str, inventory_path: str | None = None):
         "origin_date": origin_date,
         "rows": len(report_df),
         "decision_status_counts": report_df["decision_status"].value_counts().to_dict(),
+        "confidence_counts": report_df["prediction_confidence"].value_counts().to_dict(),
         "priority_items": priority_df.to_dict(orient="records"),
         "priority_items_truncated": len(priority_df) == MAX_PRIORITY_ROWS_SHOWN,
     }
@@ -114,6 +115,7 @@ HTML_PAGE = """
 <title>Favorita Sales Forecast</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
     --bg: #0B1420;
@@ -136,7 +138,7 @@ HTML_PAGE = """
     font-family: 'Inter', -apple-system, sans-serif;
     background: var(--bg);
     color: var(--text);
-    max-width: 860px;
+    max-width: 1320px;
     margin: 0 auto;
     padding: 40px 24px 64px;
   }
@@ -304,6 +306,20 @@ HTML_PAGE = """
   #downloadLink:hover { text-decoration: underline; }
   #note { color: var(--text-dim); font-size: 12px; margin-top: 10px; }
   #summaryEmpty { color: var(--text-dim); font-size: 14px; }
+    .chart-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 0 0 14px;
+  }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr;
+    gap: 16px;
+  }
+  .chart-panel canvas { max-height: 220px; }
 </style>
 </head>
 <body>
@@ -331,6 +347,7 @@ HTML_PAGE = """
   </div>
 
   <div id="metricsContainer"></div>
+  <div id="chartsContainer"></div>
   <div id="summaryEmpty" class="panel">Pick a date and run a forecast to see results.</div>
   <div id="tableContainer"></div>
   <a id="downloadLink" href="#">&darr; Download full report (CSV)</a>
@@ -377,7 +394,7 @@ async function runForecast() {
         <div class="metric stockout"><div class="num">${stockout}</div><div class="lbl">Stockout risk</div></div>
         <div class="metric overstock"><div class="num">${overstock}</div><div class="lbl">Overstock risk</div></div>
       </div>`;
-
+    renderCharts(data);
     if (data.priority_items.length > 0) {
       let html = '<table><tr><th>Store</th><th>Product</th><th>Target date</th><th style="text-align:right">Forecast</th><th>Status</th></tr>';
       for (const row of data.priority_items) {
@@ -403,6 +420,72 @@ async function runForecast() {
   } finally {
     btn.disabled = false;
   }
+}
+let statusChart, confidenceChart, priorityChart;
+const statusLabels = { optimal: "Optimal", stockout_risk: "Stockout risk", overstock_risk: "Overstock risk", no_inventory_data: "No inventory data" };
+const statusColors = { optimal: "#3FBF8F", stockout_risk: "#E5533D", overstock_risk: "#C9932E", no_inventory_data: "#45607C" };
+const confLabels = { high: "High", medium: "Medium", low: "Low", unknown: "Unknown" };
+const confColors = { high: "#3FBF8F", medium: "#E8A33D", low: "#E5533D", unknown: "#45607C" };
+
+Chart.defaults.color = '#8FA3B8';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.borderColor = '#263449';
+
+function renderCharts(data) {
+  if (statusChart) statusChart.destroy();
+  if (confidenceChart) confidenceChart.destroy();
+  if (priorityChart) priorityChart.destroy();
+
+  document.getElementById('chartsContainer').innerHTML = `
+    <div class="chart-grid">
+      <div class="panel chart-panel"><p class="chart-title">Decision status</p><canvas id="statusChart"></canvas></div>
+      <div class="panel chart-panel"><p class="chart-title">Model confidence</p><canvas id="confidenceChart"></canvas></div>
+      <div class="panel chart-panel"><p class="chart-title">Top items needing attention</p><canvas id="priorityChart"></canvas></div>
+    </div>
+  `;
+
+  const statusCounts = data.decision_status_counts;
+  statusChart = new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(statusCounts).map(k => statusLabels[k] || k),
+      datasets: [{ data: Object.values(statusCounts),
+                   backgroundColor: Object.keys(statusCounts).map(k => statusColors[k] || '#45607C'),
+                   borderColor: '#14202F', borderWidth: 2 }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } } }
+  });
+
+  const confCounts = data.confidence_counts;
+  confidenceChart = new Chart(document.getElementById('confidenceChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(confCounts).map(k => confLabels[k] || k),
+      datasets: [{ data: Object.values(confCounts),
+                   backgroundColor: Object.keys(confCounts).map(k => confColors[k] || '#45607C'),
+                   borderColor: '#14202F', borderWidth: 2 }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } } }
+  });
+
+  const sortedItems = [...data.priority_items].sort((a, b) => b.forecast - a.forecast).slice(0, 10);
+  priorityChart = new Chart(document.getElementById('priorityChart'), {
+    type: 'bar',
+    data: {
+      labels: sortedItems.map(r => `Store ${r.store_nbr} · ${r.family}`),
+      datasets: [{ data: sortedItems.map(r => r.forecast),
+                   backgroundColor: sortedItems.map(r => statusColors[r.decision_status] || '#45607C'),
+                   borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#263449' }, ticks: { font: { family: "'IBM Plex Mono', monospace", size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
 }
 </script>
 </body>
